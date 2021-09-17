@@ -389,7 +389,7 @@ public class MessageServiceImpl implements MessageService {
             PageImpl<MessageView> page = new PageImpl<>(messageViews, query.page(), total);
             return new MessagePageTask(page, queueOffsetInfos);
         } catch (Exception e) {
-            throw Throwables.propagate(e);
+            throw new RuntimeException(e);
         } finally {
             consumer.shutdown();
         }
