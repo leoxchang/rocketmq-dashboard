@@ -25,6 +25,7 @@ module.controller('messageController', ['$scope', 'ngDialog', '$http', 'Notifica
     $scope.queryMessageByTopicResult = [];
     $scope.queryMessageByTopicAndKeyResult = [];
     $scope.queryMessageByMessageIdResult = {};
+    $scope.tag = "";
     $http({
         method: "GET",
         url: "topic/list.query",
@@ -72,6 +73,7 @@ module.controller('messageController', ['$scope', 'ngDialog', '$http', 'Notifica
                 topic: $scope.selectedTopic,
                 begin: $scope.timepickerBegin.valueOf(),
                 end: $scope.timepickerEnd.valueOf(),
+                tag: $scope.tag.valueOf(),
                 pageNum: $scope.paginationConf.currentPage,
                 pageSize: $scope.paginationConf.itemsPerPage,
                 taskId: $scope.taskId
@@ -107,8 +109,8 @@ module.controller('messageController', ['$scope', 'ngDialog', '$http', 'Notifica
             params: {
                 topic: $scope.selectedTopic,
                 begin: $scope.timepickerBegin.valueOf(),
-                end: $scope.timepickerEnd.valueOf()
-
+                end: $scope.timepickerEnd.valueOf(),
+                tag: $scope.tag.valueOf(),
             }
         }).success(function (resp) {
             if (resp.status == 0) {

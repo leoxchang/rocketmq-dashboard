@@ -148,7 +148,6 @@ public class DashboardCollectServiceImpl implements DashboardCollectService {
         File file = new File(dataLocationPath + date + "_topic" + ".json");
         if (!file.exists()) {
             log.info(String.format("No dashboard data for data: %s", date));
-            //throw Throwables.propagate(new ServiceException(1, "This date have't data!"));
             return Maps.newHashMap();
         }
         return jsonDataFile2map(file);

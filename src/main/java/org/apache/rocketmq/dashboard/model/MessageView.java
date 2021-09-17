@@ -46,6 +46,7 @@ public class MessageView {
     private int flag;
     private Map<String, String> properties;
     private String messageBody; // body
+    private String tags;
 
     /** from Message **/
 
@@ -192,5 +193,12 @@ public class MessageView {
 
     public void setMessageBody(String messageBody) {
         this.messageBody = messageBody;
+    }
+    public String getTags() {
+        return tags;
+    }
+
+    public void setTags(String tags) {
+        this.tags = tags;
     }
 }

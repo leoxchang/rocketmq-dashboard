@@ -31,6 +31,7 @@ import org.apache.rocketmq.acl.common.SessionCredentials;
 import org.apache.rocketmq.client.consumer.DefaultMQPullConsumer;
 import org.apache.rocketmq.client.consumer.PullResult;
 import org.apache.rocketmq.client.consumer.PullStatus;
+import org.apache.rocketmq.client.impl.consumer.DefaultMQPullConsumerImpl;
 import org.apache.rocketmq.common.MixAll;
 import org.apache.rocketmq.common.Pair;
 import org.apache.rocketmq.common.message.MessageClientIDSetter;
@@ -59,13 +60,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
-import java.util.Collections;
-import java.util.List;
-import java.util.Comparator;
-import java.util.ArrayList;
-import java.util.Set;
-import java.util.Collection;
-import java.util.Date;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -83,7 +78,8 @@ public class MessageServiceImpl implements MessageService {
     private RMQConfigure configure;
     /**
      * @see org.apache.rocketmq.store.config.MessageStoreConfig maxMsgsNumBatch = 64;
-     * @see org.apache.rocketmq.store.index.IndexService maxNum = Math.min(maxNum, this.defaultMessageStore.getMessageStoreConfig().getMaxMsgsNumBatch());
+     * @see org.apache.rocketmq.store.index.IndexService maxNum = Math.min(maxNum, this.defaultMessageStore
+     * .getMessageStoreConfig().getMaxMsgsNumBatch());
      */
     private final static int QUERY_MESSAGE_MAX_NUM = 64;
     @Resource
@@ -104,7 +100,8 @@ public class MessageServiceImpl implements MessageService {
     @Override
     public List<MessageView> queryMessageByTopicAndKey(String topic, String key) {
         try {
-            return Lists.transform(mqAdminExt.queryMessage(topic, key, QUERY_MESSAGE_MAX_NUM, 0, System.currentTimeMillis()).getMessageList(), new Function<MessageExt, MessageView>() {
+            return Lists.transform(mqAdminExt.queryMessage(topic, key, QUERY_MESSAGE_MAX_NUM, 0,
+                    System.currentTimeMillis()).getMessageList(), new Function<MessageExt, MessageView>() {
                 @Override
                 public MessageView apply(MessageExt messageExt) {
                     return MessageView.fromMessageExt(messageExt);
@@ -116,74 +113,80 @@ public class MessageServiceImpl implements MessageService {
     }
 
     @Override
-    public List<MessageView> queryMessageByTopic(String topic, final long begin, final long end) {
-        boolean isEnableAcl = !StringUtils.isEmpty(configure.getAccessKey()) && !StringUtils.isEmpty(configure.getSecretKey());
-        RPCHook rpcHook = null;
-        if (isEnableAcl) {
-            rpcHook = new AclClientRPCHook(new SessionCredentials(configure.getAccessKey(), configure.getSecretKey()));
-        }
-        DefaultMQPullConsumer consumer = buildDefaultMQPullConsumer(rpcHook, configure.isUseTLS());
+    public List<MessageView> queryMessageByTopic(final String topic, final String tag, final long begin,
+                                                 final long end) {
+        DefaultMQPullConsumer consumer = new DefaultMQPullConsumer(MixAll.TOOLS_CONSUMER_GROUP);
         List<MessageView> messageViewList = Lists.newArrayList();
+        DefaultMQPullConsumerImpl defaultMQPullConsumer = new DefaultMQPullConsumerImpl(consumer, null);
         try {
+
             String subExpression = "*";
-            consumer.start();
-            Set<MessageQueue> mqs = consumer.fetchSubscribeMessageQueues(topic);
+            defaultMQPullConsumer.start();
+            Set<MessageQueue> mqs = defaultMQPullConsumer.fetchSubscribeMessageQueues(topic);
             for (MessageQueue mq : mqs) {
-                long minOffset = consumer.searchOffset(mq, begin);
-                long maxOffset = consumer.searchOffset(mq, end);
-                READQ:
+                long minOffset = defaultMQPullConsumer.searchOffset(mq, begin);
+                long maxOffset = defaultMQPullConsumer.searchOffset(mq, end);
                 for (long offset = minOffset; offset <= maxOffset; ) {
+                    boolean isBreak = false;
                     try {
                         if (messageViewList.size() > 2000) {
                             break;
                         }
-                        PullResult pullResult = consumer.pull(mq, subExpression, offset, 32);
+                        PullResult pullResult = defaultMQPullConsumer.pull(mq, subExpression, offset, 32);
                         offset = pullResult.getNextBeginOffset();
                         switch (pullResult.getPullStatus()) {
                             case FOUND:
 
-                                List<MessageView> messageViewListByQuery = Lists.transform(pullResult.getMsgFoundList(), new Function<MessageExt, MessageView>() {
-                                    @Override
-                                    public MessageView apply(MessageExt messageExt) {
-                                        messageExt.setBody(null);
-                                        return MessageView.fromMessageExt(messageExt);
-                                    }
-                                });
-                                List<MessageView> filteredList = Lists.newArrayList(Iterables.filter(messageViewListByQuery, new Predicate<MessageView>() {
-                                    @Override
-                                    public boolean apply(MessageView messageView) {
-                                        if (messageView.getStoreTimestamp() < begin || messageView.getStoreTimestamp() > end) {
-                                            logger.info("begin={} end={} time not in range {} {}", begin, end, messageView.getStoreTimestamp(), new Date(messageView.getStoreTimestamp()).toString());
-                                        }
-                                        return messageView.getStoreTimestamp() >= begin && messageView.getStoreTimestamp() <= end;
-                                    }
-                                }));
+                                List<MessageView> messageViewListByQuery =
+                                        Lists.transform(pullResult.getMsgFoundList(), messageExt -> {
+                                            messageExt.setBody(null);
+
+                                            return MessageView.fromMessageExt(messageExt);
+                                        });
+                                List<MessageView> filteredList =
+                                        Lists.newArrayList(Iterables.filter(messageViewListByQuery,
+                                                messageView -> {
+                                                    if (messageView.getStoreTimestamp() < begin || messageView.getStoreTimestamp() > end) {
+                                                        logger.info("begin={} end={} time not in range {} {}",
+                                                                begin, end,
+                                                                messageView.getStoreTimestamp(),
+                                                                new Date(messageView.getStoreTimestamp()).toString());
+                                                    }
+                                                    String tags = messageView.getTags();
+                                                    if (StringUtils.isNotEmpty(tag) && !Objects.equals(tags, tag)) {
+                                                        return false;
+                                                    }
+                                                    return messageView.getStoreTimestamp() >= begin && messageView.getStoreTimestamp() <= end;
+                                                }));
                                 messageViewList.addAll(filteredList);
                                 break;
                             case NO_MATCHED_MSG:
                             case NO_NEW_MSG:
                             case OFFSET_ILLEGAL:
-                                break READQ;
+                                isBreak = true;
+                                break;
+                            default:
+                                break;
+                        }
+                        if (isBreak) {
+                            break;
                         }
                     } catch (Exception e) {
                         break;
                     }
                 }
             }
-            Collections.sort(messageViewList, new Comparator<MessageView>() {
-                @Override
-                public int compare(MessageView o1, MessageView o2) {
-                    if (o1.getStoreTimestamp() - o2.getStoreTimestamp() == 0) {
-                        return 0;
-                    }
-                    return (o1.getStoreTimestamp() > o2.getStoreTimestamp()) ? -1 : 1;
+            Collections.sort(messageViewList, (o1, o2) -> {
+                if (o1.getStoreTimestamp() - o2.getStoreTimestamp() == 0) {
+                    return 0;
                 }
+                return (o1.getStoreTimestamp() > o2.getStoreTimestamp()) ? 1 : -1;
             });
             return messageViewList;
         } catch (Exception e) {
-            throw Throwables.propagate(e);
+            throw new RuntimeException(e);
         } finally {
-            consumer.shutdown();
+            defaultMQPullConsumer.shutdown();
         }
     }
 
@@ -232,7 +235,7 @@ public class MessageServiceImpl implements MessageService {
                 query.getPageSize(),
                 query.getTopic(),
                 query.getBegin(),
-                query.getEnd());
+                query.getEnd(), query.getTag());
 
         List<QueueOffsetInfo> queueOffsetInfos = CACHE.getIfPresent(query.getTaskId());
 
@@ -250,7 +253,8 @@ public class MessageServiceImpl implements MessageService {
     }
 
     private MessagePageTask queryFirstMessagePage(MessageQueryByPage query) {
-        boolean isEnableAcl = !StringUtils.isEmpty(configure.getAccessKey()) && !StringUtils.isEmpty(configure.getSecretKey());
+        boolean isEnableAcl =
+                !StringUtils.isEmpty(configure.getAccessKey()) && !StringUtils.isEmpty(configure.getSecretKey());
         RPCHook rpcHook = null;
         if (isEnableAcl) {
             rpcHook = new AclClientRPCHook(new SessionCredentials(configure.getAccessKey(), configure.getSecretKey()));
@@ -269,7 +273,8 @@ public class MessageServiceImpl implements MessageService {
             for (MessageQueue messageQueue : messageQueues) {
                 Long minOffset = consumer.searchOffset(messageQueue, query.getBegin());
                 Long maxOffset = consumer.searchOffset(messageQueue, query.getEnd()) + 1;
-                queueOffsetInfos.add(new QueueOffsetInfo(idx++, minOffset, maxOffset, minOffset, minOffset, messageQueue));
+                queueOffsetInfos.add(new QueueOffsetInfo(idx++, minOffset, maxOffset, minOffset, minOffset,
+                        messageQueue));
             }
 
             // check first offset has message
@@ -391,7 +396,8 @@ public class MessageServiceImpl implements MessageService {
     }
 
     private Page<MessageView> queryMessageByTaskPage(MessageQueryByPage query, List<QueueOffsetInfo> queueOffsetInfos) {
-        boolean isEnableAcl = !StringUtils.isEmpty(configure.getAccessKey()) && !StringUtils.isEmpty(configure.getSecretKey());
+        boolean isEnableAcl =
+                !StringUtils.isEmpty(configure.getAccessKey()) && !StringUtils.isEmpty(configure.getSecretKey());
         RPCHook rpcHook = null;
         if (isEnableAcl) {
             rpcHook = new AclClientRPCHook(new SessionCredentials(configure.getAccessKey(), configure.getSecretKey()));
@@ -426,9 +432,12 @@ public class MessageServiceImpl implements MessageService {
                 if (size == 0) {
                     continue;
                 }
-
+                String subExpression = "*";
+                if (StringUtils.isNotBlank(query.getTag())) {
+                    subExpression = query.getTag();
+                }
                 while (size > 0) {
-                    PullResult pullResult = consumer.pull(queueOffsetInfo.getMessageQueues(), "*", start, 32);
+                    PullResult pullResult = consumer.pull(queueOffsetInfo.getMessageQueues(), subExpression, start, 32);
                     if (pullResult.getPullStatus() == PullStatus.FOUND) {
                         List<MessageExt> poll = pullResult.getMsgFoundList();
                         if (poll.size() == 0) {

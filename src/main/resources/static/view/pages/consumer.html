@@ -158,7 +158,7 @@
     <div class="modal-header">
         <h4 class="modal-title">[{{ngDialogData.consumerGroupName}}]{{'CLIENT'|translate}}</h4>
     </div>
-    <div class="modal-body ">
+    <div class="modal-body " style="width: 900px">
         <form class="form-horizontal" novalidate>
             <table class="table table-bordered">
                 <tr>
@@ -168,7 +168,7 @@
                     <th class="text-center">Version</th>
                 </tr>
                 <tr ng-repeat="conn in ngDialogData.data.connectionSet">
-                    <td class="text-center">{{conn.clientId}}</td>
+                    <td class="text-center" style="word-break: break-word">{{conn.clientId}}</td>
                     <td class="text-center">{{conn.clientAddr}}</td>
                     <td class="text-center">{{conn.language}}</td>
                     <td class="text-center">{{conn.versionDesc}}</td>
@@ -182,7 +182,7 @@
                 </tr>
                 <tr ng-repeat="(topic,topicDetail) in ngDialogData.data.subscriptionTable">
                     <td class="text-center">{{topic}}</td>
-                    <td class="text-center">{{topicDetail.subString}}</td>
+                    <td class="text-center" style="word-break: break-word">{{topicDetail.subString}}</td>
                 </tr>
             </table>
             <p>ConsumeType: {{ngDialogData.data.consumeType}}</p>

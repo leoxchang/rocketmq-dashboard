@@ -32,6 +32,8 @@ public class MessageQuery {
 
     private long end;
 
+    private String tag;
+
     public int getPageNum() {
         return pageNum;
     }
@@ -78,5 +80,13 @@ public class MessageQuery {
 
     public void setEnd(long end) {
         this.end = end;
+    }
+
+    public String getTag() {
+        return tag;
+    }
+
+    public void setTag(String tag) {
+        this.tag = tag;
     }
 }

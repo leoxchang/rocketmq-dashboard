@@ -36,13 +36,15 @@ public class MessageQueryByPage {
     private String topic;
     private long begin;
     private long end;
+    private String tag;
 
-    public MessageQueryByPage(int pageNum, int pageSize, String topic, long begin, long end) {
+    public MessageQueryByPage(int pageNum, int pageSize, String topic, long begin, long end, String tag) {
         this.pageNum = pageNum;
         this.pageSize = pageSize;
         this.topic = topic;
         this.begin = begin;
         this.end = end;
+        this.tag = tag;
     }
 
     public void setPageNum(int pageNum) {
@@ -77,6 +79,14 @@ public class MessageQueryByPage {
         this.end = end;
     }
 
+    public String getTag() {
+        return tag;
+    }
+
+    public void setTag(String tag) {
+        this.tag = tag;
+    }
+
     public int getPageNum() {
         return pageNum <= 0 ? DEFAULT_PAGE : pageNum - 1;
     }
@@ -102,6 +112,7 @@ public class MessageQueryByPage {
                 ", topic='" + topic + '\'' +
                 ", begin=" + begin +
                 ", end=" + end +
+                ",tag=" + tag +
                 '}';
     }
 }
