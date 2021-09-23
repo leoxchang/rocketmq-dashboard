@@ -18,6 +18,7 @@ package org.apache.rocketmq.dashboard.task;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.TypeReference;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.time.DateUtils;
 import org.apache.rocketmq.common.MixAll;
 import org.apache.rocketmq.common.protocol.body.TopicList;
@@ -56,10 +57,10 @@ public class MonitorTask {
     private String phone;
 
     @Value("${rocketmq.monitor.DLQTopic.day}")
-    private  Integer dlqtopicDay;
+    private Integer dlqtopicDay;
 
     @Value("${rocketmq.monitor.headUpTopic.day}")
-    private  Integer  headUpTopicDay;
+    private Integer headUpTopicDay;
 
     @Resource
     private MonitorService monitorService;
@@ -108,10 +109,9 @@ public class MonitorTask {
                         if (topicConfigInfo.getPerm() != 6) {
                             topicConfigInfo.setPerm(6);
                             topicService.createOrUpdate(topicConfigInfo);
-                            topicService.createOrUpdate(topicConfigInfo);
                         }
                         Date currDate = new Date();
-                        Date threeDate = DateUtils.addDays(currDate,dlqtopicDay);
+                        Date threeDate = DateUtils.addDays(currDate, dlqtopicDay);
                         MessageQuery query = new MessageQuery();
                         query.setTopic(topic);
                         query.setTaskId("");
@@ -134,13 +134,15 @@ public class MonitorTask {
                 String topicStr = String.join(",", hasMessageTopicSet);
                 AsrSmsCodes codes = AsrSmsUtil.getAsrSmsCodes("dlq_Topic");
                 dingDingService.sendToDingDing(codes, "mq-死信topic消息通知", topicStr);
-                if (phone.contains(",")) {//多个手机号
-                    String[] phoneNos = phone.split(",");
-                    for (String phoneNo : phoneNos) {
-                        asrSmsService.sendSms(codes, phoneNo, topicStr);
+                if (StringUtils.isNotBlank(phone)) {
+                    if (phone.contains(",")) {//多个手机号
+                        String[] phoneNos = phone.split(",");
+                        for (String phoneNo : phoneNos) {
+                            asrSmsService.sendSms(codes, phoneNo, topicStr);
+                        }
+                    } else {//单个手机号
+                        asrSmsService.sendSms(codes, phone, topicStr);
                     }
-                } else {//单个手机号
-                    asrSmsService.sendSms(codes, phone, topicStr);
                 }
             }
         }
@@ -163,7 +165,7 @@ public class MonitorTask {
                 }
                 Integer headUp = headUpMap.get(topic);
                 Date currDate = new Date();
-                Date threeDate = DateUtils.addDays(currDate,headUpTopicDay);
+                Date threeDate = DateUtils.addDays(currDate, headUpTopicDay);
                 MessageQuery query = new MessageQuery();
                 query.setTopic(topic);
                 query.setTaskId("");
@@ -185,13 +187,15 @@ public class MonitorTask {
                 String topicStr = String.join(",", MessageManyTopicSet);
                 AsrSmsCodes codes = AsrSmsUtil.getAsrSmsCodes("head_up_topic");
                 dingDingService.sendToDingDing(codes, "mq-topic中message消息堆积通知", topicStr);
-                if (phone.contains(",")) {//多个手机号
-                    String[] phoneNos = phone.split(",");
-                    for (String phoneNo : phoneNos) {
-                        asrSmsService.sendSms(codes, phoneNo, topicStr);
+                if (StringUtils.isNotBlank(phone)) {
+                    if (phone.contains(",")) {//多个手机号
+                        String[] phoneNos = phone.split(",");
+                        for (String phoneNo : phoneNos) {
+                            asrSmsService.sendSms(codes, phoneNo, topicStr);
+                        }
+                    } else {//单个手机号
+                        asrSmsService.sendSms(codes, phone, topicStr);
                     }
-                } else {//单个手机号
-                    asrSmsService.sendSms(codes, phone, topicStr);
                 }
             }
         }
