@@ -149,16 +149,16 @@ public class MonitorTask {
     public void scanNormalTopic() throws Exception {
         List<GroupConsumeInfo> groupConsumeInfos = consumerService.queryGroupList();
         if (groupConsumeInfos != null && groupConsumeInfos.size() > 0) {
-            Set<String> MessageManyTopicSet = new HashSet<String>();
+            Set<String> MessageManyGroupSet = new HashSet<String>();
             for (GroupConsumeInfo groupConsumeInfo : groupConsumeInfos) {
                 //发消息
                 if (groupConsumeInfo.getDiffTotal() >= topic) {//message数量已经超过预警阈值
                     logger.info("consumer-group:{}中有消息堆积,Delay:{}", groupConsumeInfo.getGroup(), groupConsumeInfo.getDiffTotal());
-                    MessageManyTopicSet.add(groupConsumeInfo.getGroup());
+                    MessageManyGroupSet.add(groupConsumeInfo.getGroup());
                 }
             }
-            if (MessageManyTopicSet.size() > 0) {
-                String topicStr = String.join(",", MessageManyTopicSet);
+            if (MessageManyGroupSet.size() > 0) {
+                String topicStr = String.join(",", MessageManyGroupSet);
                 AsrSmsCodes codes = AsrSmsUtil.getAsrSmsCodes("head_up_Group");
                 dingDingService.sendToDingDing(codes, "mq-consumer-group中message消息堆积通知", topicStr);
                 if (StringUtils.isNotBlank(phone)) {
