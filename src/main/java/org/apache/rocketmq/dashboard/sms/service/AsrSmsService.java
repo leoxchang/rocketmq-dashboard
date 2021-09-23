@@ -25,9 +25,8 @@ public class AsrSmsService {
     /**
      * 短信发送接口
      *
-     * @param code    com.asr.hedu.common.sms.constant.AsrSmsCodes
-     * @param smsData 验证码数据
      * @param phone
+     * @param content
      * @return <ul>
      * <li> 大于0的数字	提交成功</li>
      * <li> –1	账号未注册</li>
@@ -46,22 +45,11 @@ public class AsrSmsService {
      * @author lujianfeng
      * @date 2020/9/27
      */
-    public String sendSms(AsrSmsCodes code, String phone, String... smsData) {
+    public String sendSms(String phone, String content) {
         //组装请求数据
         MultiValueMap<String, String> smsObject = new LinkedMultiValueMap<>();
         smsObject.set("CorpID", InspurProperties.Sms.SMS_KEY);
         smsObject.set("Pwd", InspurProperties.Sms.SMS_PWD);
-        String content = code.getSmsContent();
-        if (smsData != null && smsData.length > 0) {
-            //sms信息单占位符替换，如果多占位符，需要修改为map进行匹配
-            String regex = "\\$\\{(\\w+)\\}";
-            Matcher m = Pattern.compile(regex).matcher(content);
-            int i = 0;
-            while (m.find()) {
-                content = content.replace(m.group(), smsData[i]);
-                i++;
-            }
-        }
         smsObject.set("Content", content);
         smsObject.set("Mobile", phone);
         RestTemplate restTemplate = new RestTemplate(new HttpsClientRequestFactory());
@@ -77,25 +65,5 @@ public class AsrSmsService {
             }
         }
         throw new RuntimeException("sms 发送失败！code : [" + en.getStatusCodeValue() + "] , content : [" + en.getBody() + "]");
-    }
-
-    /**
-     * 短信余额查询接口
-     *
-     * @param
-     * @return java.lang.String
-     * @author lujianfeng
-     * @date 2020/9/27
-     */
-    public String checkBalance() {
-        RestTemplate restTemplate = new RestTemplate(new HttpsClientRequestFactory());
-        Map<String, String> checkObject = new HashMap<>();
-        checkObject.put("CorpID", InspurProperties.Sms.SMS_KEY);
-        checkObject.put("Pwd", InspurProperties.Sms.SMS_PWD);
-        ResponseEntity<String> en = restTemplate.getForEntity(InspurProperties.QUERY_SMS_URL, String.class, checkObject);
-        if (en.getStatusCode() == HttpStatus.OK) {
-            return en.getBody();
-        }
-        throw new RuntimeException("sms 余额查询失败！code : [" + en.getStatusCodeValue() + "] , content : [" + en.getBody() + "]");
     }
 }

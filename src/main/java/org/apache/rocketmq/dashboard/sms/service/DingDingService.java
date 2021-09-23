@@ -40,7 +40,7 @@ public class DingDingService {
     @Value("${rocketmq.monitor.dingdingUrl}")
     private String dingdingUrl;
 
-    public void sendToDingDing(AsrSmsCodes code, String title, String... smsData) {
+    public void sendToDingDing(String title,String content) {
         try {
             X509TrustManager trustManager = new X509TrustManager() {
                 @Override
@@ -74,17 +74,6 @@ public class DingDingService {
                     .setDefaultRequestConfig(requestConfig).build();
 
             try {
-                String content = code.getSmsContent();
-                if (smsData != null && smsData.length > 0) {
-                    //sms信息单占位符替换，如果多占位符，需要修改为map进行匹配
-                    String regex = "\\$\\{(\\w+)\\}";
-                    Matcher m = Pattern.compile(regex).matcher(content);
-                    int i = 0;
-                    while (m.find()) {
-                        content = content.replace(m.group(), smsData[i]);
-                        i++;
-                    }
-                }
                 HttpPost dingPost = new HttpPost(dingdingUrl);
                 dingPost.addHeader("Content-type", "application/json");
                 JSONObject jsonObject = new JSONObject();

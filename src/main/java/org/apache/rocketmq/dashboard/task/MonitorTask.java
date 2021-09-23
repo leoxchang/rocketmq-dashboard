@@ -16,25 +16,18 @@
  */
 package org.apache.rocketmq.dashboard.task;
 
-import com.alibaba.fastjson.JSON;
-import com.alibaba.fastjson.TypeReference;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.time.DateUtils;
 import org.apache.rocketmq.common.MixAll;
 import org.apache.rocketmq.common.protocol.body.TopicList;
-import org.apache.rocketmq.common.topic.TopicValidator;
-import org.apache.rocketmq.dashboard.model.ConsumerMonitorConfig;
 import org.apache.rocketmq.dashboard.model.GroupConsumeInfo;
 import org.apache.rocketmq.dashboard.model.MessagePage;
 import org.apache.rocketmq.dashboard.model.MessageView;
 import org.apache.rocketmq.dashboard.model.request.MessageQuery;
 import org.apache.rocketmq.dashboard.model.request.TopicConfigInfo;
 import org.apache.rocketmq.dashboard.service.*;
-import org.apache.rocketmq.dashboard.sms.constant.AsrSmsCodes;
 import org.apache.rocketmq.dashboard.sms.service.AsrSmsService;
-import org.apache.rocketmq.dashboard.sms.service.AsrSmsUtil;
 import org.apache.rocketmq.dashboard.sms.service.DingDingService;
-import org.apache.rocketmq.dashboard.util.JsonUtil;
 import org.apache.rocketmq.tools.admin.MQAdminExt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,19 +41,16 @@ import java.util.*;
 
 @Component
 public class MonitorTask {
-    private Logger logger = LoggerFactory.getLogger(MonitorTask.class);
+    private final Logger logger = LoggerFactory.getLogger(MonitorTask.class);
 
-    @Value("${rocketmq.monitor.topic}")
-    private Integer topic;
+    @Value("${rocketmq.monitor.delay}")
+    private Integer delay;
 
     @Value("${rocketmq.monitor.phone}")
     private String phone;
 
     @Value("${rocketmq.monitor.DLQTopic.day}")
-    private Integer dlqtopicDay;
-
-    @Resource
-    private MonitorService monitorService;
+    private Integer dlqTopicDay;
 
     @Resource
     private ConsumerService consumerService;
@@ -80,23 +70,12 @@ public class MonitorTask {
     @Resource
     private AsrSmsService asrSmsService;
 
-
-    //    @Scheduled(cron = "* * * * * ?")
-    public void scanProblemConsumeGroup() {
-        for (Map.Entry<String, ConsumerMonitorConfig> configEntry : monitorService.queryConsumerMonitorConfig().entrySet()) {
-            GroupConsumeInfo consumeInfo = consumerService.queryGroup(configEntry.getKey());
-            if (consumeInfo.getCount() < configEntry.getValue().getMinCount() || consumeInfo.getDiffTotal() > configEntry.getValue().getMaxDiffTotal()) {
-                logger.info("op=look consumeInfo {}", JsonUtil.obj2String(consumeInfo)); // notify the alert system
-            }
-        }
-    }
-
     @Scheduled(cron = "${rocketmq.monitor.DLQTopic.cron}")
     public void scanDLQTopic() throws Exception {
         TopicList topicList = mqAdminExt.fetchAllTopicList();
         Set<String> topicSet = topicList.getTopicList();
         if (topicSet != null && topicSet.size() > 0) {
-            Set<String> hasMessageTopicSet = new HashSet<String>();
+            Set<String> hasMessageTopicSet = new HashSet<>();
             for (String topic : topicSet) {
                 if (topic.startsWith(MixAll.DLQ_GROUP_TOPIC_PREFIX)) {
                     logger.info("DLQ_TOPIC是:" + topic);
@@ -108,18 +87,18 @@ public class MonitorTask {
                             topicService.createOrUpdate(topicConfigInfo);
                         }
                         Date currDate = new Date();
-                        Date threeDate = DateUtils.addDays(currDate, dlqtopicDay);
+                        Date threeDate = DateUtils.addDays(currDate, dlqTopicDay);
                         MessageQuery query = new MessageQuery();
                         query.setTopic(topic);
                         query.setTaskId("");
                         query.setBegin(threeDate.getTime());
                         query.setEnd(currDate.getTime());
-                        logger.info("query:{}", JSON.toJSONString(query));
                         MessagePage messagePage = messageService.queryMessageByPage(query);
                         if (messagePage != null) {
                             Page<MessageView> views = messagePage.getPage();
-                            if (views != null && views.getContent() != null && views.getContent().size() > 0) {
-                                logger.info("死信topic:{}中有message,views.getContent size:{}", topic, views.getContent().size());
+                            if (views != null && views.getContent().size() > 0) {
+                                logger.warn("死信topic:{}中有message,views.getContent size:{}", topic,
+                                        views.getContent().size());
                                 //发消息
                                 hasMessageTopicSet.add(topic);
                             }
@@ -128,19 +107,19 @@ public class MonitorTask {
                 }
             }
             if (hasMessageTopicSet.size() > 0) {
-                String topicStr = String.join(",", hasMessageTopicSet);
-                AsrSmsCodes codes = AsrSmsUtil.getAsrSmsCodes("dlq_Topic");
-                dingDingService.sendToDingDing(codes, "mq-死信topic消息通知", topicStr);
-                if (StringUtils.isNotBlank(phone)) {
-                    if (phone.contains(",")) {//多个手机号
-                        String[] phoneNos = phone.split(",");
-                        for (String phoneNo : phoneNos) {
-                            asrSmsService.sendSms(codes, phoneNo, topicStr);
-                        }
-                    } else {//单个手机号
-                        asrSmsService.sendSms(codes, phone, topicStr);
+                StringBuilder builder = new StringBuilder();
+                builder.append("产生私信队列，请注意查看！死信topic为：");
+                int i = 0;
+                for (String topic : hasMessageTopicSet) {
+                    builder.append(topic);
+                    if(i != hasMessageTopicSet.size() - 1){
+                        builder.append("，");
                     }
+                    i++;
                 }
+                builder.append("。");
+                dingDingService.sendToDingDing("mq-死信topic消息通知", builder.toString());
+                sendSms(phone, builder.toString());
             }
         }
     }
@@ -149,30 +128,46 @@ public class MonitorTask {
     public void scanNormalTopic() throws Exception {
         List<GroupConsumeInfo> groupConsumeInfos = consumerService.queryGroupList();
         if (groupConsumeInfos != null && groupConsumeInfos.size() > 0) {
-            Set<String> MessageManyGroupSet = new HashSet<String>();
+            Map<String, Long> groupMap = new HashMap<>(16);
             for (GroupConsumeInfo groupConsumeInfo : groupConsumeInfos) {
                 //发消息
-                if (groupConsumeInfo.getDiffTotal() >= topic) {//message数量已经超过预警阈值
-                    logger.info("consumer-group:{}中有消息堆积,Delay:{}", groupConsumeInfo.getGroup(), groupConsumeInfo.getDiffTotal());
-                    MessageManyGroupSet.add(groupConsumeInfo.getGroup());
+                //message数量已经超过预警阈值
+                if (groupConsumeInfo.getDiffTotal() >= delay) {
+                    logger.warn("consumer-group:[{}]中有消息堆积,Delay:{}", groupConsumeInfo.getGroup(),
+                            groupConsumeInfo.getDiffTotal());
+                    groupMap.put(groupConsumeInfo.getGroup(), groupConsumeInfo.getDiffTotal());
                 }
             }
-            if (MessageManyGroupSet.size() > 0) {
-                String topicStr = String.join(",", MessageManyGroupSet);
-                AsrSmsCodes codes = AsrSmsUtil.getAsrSmsCodes("head_up_Group");
-                dingDingService.sendToDingDing(codes, "mq-consumer-group中message消息堆积通知", topicStr);
-                if (StringUtils.isNotBlank(phone)) {
-                    if (phone.contains(",")) {//多个手机号
-                        String[] phoneNos = phone.split(",");
-                        for (String phoneNo : phoneNos) {
-                            asrSmsService.sendSms(codes, phoneNo, topicStr);
-                        }
-                    } else {//单个手机号
-                        asrSmsService.sendSms(codes, phone, topicStr);
-                    }
+            if (groupMap.size() > 0) {
+                StringBuilder builder = new StringBuilder();
+                builder.append("消息堆积超过阈值[").append(delay).append("]");
+                for (Map.Entry<String, Long> entry : groupMap.entrySet()) {
+                    builder.append("，");
+                    builder.append(entry.getKey()).append("堆积").append(entry.getValue()).append("条");
                 }
+                builder.append("，请注意查看！");
+                dingDingService.sendToDingDing("mq-consumer-group中message消息堆积通知", builder.toString());
+                sendSms(phone, builder.toString());
             }
         }
     }
 
+    /**
+     * 发送短信
+     * @param phone 手机号
+     * @param content 短信内容
+    */
+    private void sendSms(String phone, String content) {
+        if (StringUtils.isNotBlank(phone)) {
+            //多个手机号
+            if (phone.contains(",")) {
+                String[] phoneNos = phone.split(",");
+                for (String phoneNo : phoneNos) {
+                    asrSmsService.sendSms(phoneNo, content);
+                }
+            } else {//单个手机号
+                asrSmsService.sendSms(phone, content);
+            }
+        }
+    }
 }
