@@ -51,16 +51,13 @@ public class MonitorTask {
     private Logger logger = LoggerFactory.getLogger(MonitorTask.class);
 
     @Value("${rocketmq.monitor.topic}")
-    private String topic;
+    private Integer topic;
 
     @Value("${rocketmq.monitor.phone}")
     private String phone;
 
     @Value("${rocketmq.monitor.DLQTopic.day}")
     private Integer dlqtopicDay;
-
-    @Value("${rocketmq.monitor.headUpTopic.day}")
-    private Integer headUpTopicDay;
 
     @Resource
     private MonitorService monitorService;
@@ -148,45 +145,22 @@ public class MonitorTask {
         }
     }
 
-    @Scheduled(cron = "${rocketmq.monitor.headUpTopic.cron}")
+    @Scheduled(cron = "${rocketmq.monitor.headUpGroup.cron}")
     public void scanNormalTopic() throws Exception {
-        TopicList topicList = mqAdminExt.fetchAllTopicList();
-        Set<String> topicSet = topicList.getTopicList();
-        Map<String, Integer> headUpMap = JSON.parseObject(topic, new TypeReference<HashMap<String, Integer>>() {
-        });
-        if (topicSet != null && topicSet.size() > 0) {
+        List<GroupConsumeInfo> groupConsumeInfos = consumerService.queryGroupList();
+        if (groupConsumeInfos != null && groupConsumeInfos.size() > 0) {
             Set<String> MessageManyTopicSet = new HashSet<String>();
-            for (String topic : topicSet) {
-                if (topic.startsWith(MixAll.RETRY_GROUP_TOPIC_PREFIX)
-                        || topic.startsWith(MixAll.DLQ_GROUP_TOPIC_PREFIX)
-                        || TopicValidator.isSystemTopic(topic)
-                        || topic.startsWith("DefaultCluster")) {
-                    continue;
-                }
-                Integer headUp = headUpMap.get(topic);
-                Date currDate = new Date();
-                Date threeDate = DateUtils.addDays(currDate, headUpTopicDay);
-                MessageQuery query = new MessageQuery();
-                query.setTopic(topic);
-                query.setTaskId("");
-                query.setBegin(threeDate.getTime());
-                query.setEnd(currDate.getTime());
-                MessagePage messagePage = messageService.queryMessageByPage(query);
-                if (messagePage != null) {
-                    Page<MessageView> views = messagePage.getPage();
-                    if (views != null && views.getContent() != null && views.getContent().size() > 0) {
-                        logger.info("topic:{}中有message,views.getContent size:{}", topic, views.getContent().size());
-                        //发消息
-                        if (views.getContent().size() >= headUp) {//message数量已经超过预警阈值
-                            MessageManyTopicSet.add(topic);
-                        }
-                    }
+            for (GroupConsumeInfo groupConsumeInfo : groupConsumeInfos) {
+                //发消息
+                if (groupConsumeInfo.getDiffTotal() >= topic) {//message数量已经超过预警阈值
+                    logger.info("consumer-group:{}中有消息堆积,Delay:{}", groupConsumeInfo.getGroup(), groupConsumeInfo.getDiffTotal());
+                    MessageManyTopicSet.add(groupConsumeInfo.getGroup());
                 }
             }
             if (MessageManyTopicSet.size() > 0) {
                 String topicStr = String.join(",", MessageManyTopicSet);
-                AsrSmsCodes codes = AsrSmsUtil.getAsrSmsCodes("head_up_topic");
-                dingDingService.sendToDingDing(codes, "mq-topic中message消息堆积通知", topicStr);
+                AsrSmsCodes codes = AsrSmsUtil.getAsrSmsCodes("head_up_Group");
+                dingDingService.sendToDingDing(codes, "mq-consumer-group中message消息堆积通知", topicStr);
                 if (StringUtils.isNotBlank(phone)) {
                     if (phone.contains(",")) {//多个手机号
                         String[] phoneNos = phone.split(",");
