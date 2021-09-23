@@ -1,17 +1,6 @@
 package org.apache.rocketmq.dashboard.sms.service;
 
-import org.apache.rocketmq.dashboard.sms.constant.AsrSmsCodes;
-import org.apache.rocketmq.dashboard.sms.constant.InspurProperties;
-import org.springframework.http.*;
 import org.springframework.stereotype.Component;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
-import org.springframework.web.client.RestTemplate;
-
-import java.util.HashMap;
-import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * asr sms service
@@ -23,7 +12,7 @@ import java.util.regex.Pattern;
 public class AsrSmsService {
 
     /**
-     * 短信发送接口
+     * 短信发送接口 TODO
      *
      * @param phone
      * @param content
@@ -46,24 +35,7 @@ public class AsrSmsService {
      * @date 2020/9/27
      */
     public String sendSms(String phone, String content) {
-        //组装请求数据
-        MultiValueMap<String, String> smsObject = new LinkedMultiValueMap<>();
-        smsObject.set("CorpID", InspurProperties.Sms.SMS_KEY);
-        smsObject.set("Pwd", InspurProperties.Sms.SMS_PWD);
-        smsObject.set("Content", content);
-        smsObject.set("Mobile", phone);
-        RestTemplate restTemplate = new RestTemplate(new HttpsClientRequestFactory());
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-        HttpEntity<Object> reqEntity = new HttpEntity<>(smsObject, headers);
-        ResponseEntity<String> en = restTemplate.postForEntity(InspurProperties.SEND_SMS_URL, reqEntity, String.class);
-        if (en.getStatusCode() == HttpStatus.OK) {
-            if (Integer.parseInt(en.getBody()) > 0) {
-                return "OK";
-            } else {
-                return AsrSmsUtil.getAsrSmsReturn(en.getBody()).getErrorMsg();
-            }
-        }
-        throw new RuntimeException("sms 发送失败！code : [" + en.getStatusCodeValue() + "] , content : [" + en.getBody() + "]");
+
+        return null;
     }
 }

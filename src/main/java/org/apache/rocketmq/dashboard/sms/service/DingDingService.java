@@ -17,7 +17,6 @@ import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
-import org.apache.rocketmq.dashboard.sms.constant.AsrSmsCodes;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -27,8 +26,6 @@ import javax.net.ssl.X509TrustManager;
 import java.io.IOException;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * @author gzq
